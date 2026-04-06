@@ -5,7 +5,7 @@
 If you discover a security vulnerability in GLYPH, please report it responsibly:
 
 - **Email:** support@nuralyn.com
-- **GitHub:** Use [Security Advisories](https://github.com/nuralyn/glyph/security/advisories/new) to report privately
+- **GitHub:** Use [Security Advisories](https://github.com/Nuralyn/GLYPH/security/advisories/new) to report privately
 
 Please do not open public issues for security vulnerabilities. We will acknowledge receipt within 48 hours and provide a timeline for a fix.
 
@@ -69,7 +69,7 @@ The Google Gemini API requires the API key as a URL query parameter. This means 
 
 ## Supported Versions
 
-GLYPH is distributed as a single HTML file. We recommend always using the latest version from the [releases page](https://github.com/nuralyn/glyph/releases) or [glyph.nuralyn.com](https://glyph.nuralyn.com).
+GLYPH is distributed as a single HTML file. We recommend always using the latest version from the [releases page](https://github.com/Nuralyn/GLYPH/releases) or [glyph.nuralyn.com](https://glyph.nuralyn.com).
 
 | Version | Supported |
 |---------|-----------|
