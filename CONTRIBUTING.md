@@ -44,7 +44,7 @@ See the `examples/` folder for templates:
 
 ## Reporting Bugs
 
-Open a [GitHub issue](https://github.com/nuralyn/glyph/issues) with:
+Open a [GitHub issue](https://github.com/Nuralyn/GLYPH/issues) with:
 - What you expected to happen
 - What actually happened
 - Your browser and OS
@@ -100,4 +100,4 @@ GLYPH is a **single HTML file** with zero build dependencies. This is a delibera
 
 ## Questions?
 
-Open a [discussion](https://github.com/nuralyn/glyph/discussions) or reach out to the maintainers at hello@nuralyn.com.
+Open a [discussion](https://github.com/Nuralyn/GLYPH/discussions) or reach out to the maintainers at support@nuralyn.com.
