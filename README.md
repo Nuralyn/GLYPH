@@ -9,6 +9,8 @@ GLYPH is an archaeological pattern analysis tool that treats terrain-scale sites
 One HTML file. No dependencies. No build step. No install.
 Email it to yourself. Open it on your phone. Analyze ancient civilizations.
 
+**[Live Demo](https://glyph.nuralyn.com)** · **[Download](https://github.com/Nuralyn/GLYPH/releases)**
+
 ---
 
 ## The Thesis
@@ -162,7 +164,7 @@ GLYPH is designed to complement, not replace, traditional archaeological methods
 ```bibtex
 @software{glyph2026,
   title   = {GLYPH: Ground-Level Yield of Patterned Histories},
-  author  = {Nuralyn LLC},
+  author  = {{Nuralyn LLC}},
   year    = {2026},
   url     = {https://glyph.nuralyn.com},
   license = {MIT}
