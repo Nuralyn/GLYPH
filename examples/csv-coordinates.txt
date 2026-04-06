@@ -1,0 +1,37 @@
+# GLYPH CSV Coordinate Format
+#
+# Two formats are accepted:
+#
+#   Format A — Presence data (2 columns):
+#     x, y
+#     Each row marks a location where a feature exists.
+#
+#   Format B — Value data (3 columns):
+#     x, y, value
+#     Each row marks a location with an associated value.
+#     Cells with value > 0 become 1 in the binary grid.
+#
+# GLYPH will auto-detect headers (if the first row contains
+# non-numeric values, it's treated as a header and skipped).
+#
+# The "resolution" setting controls grid granularity:
+#   - Higher resolution = more cells = finer detail
+#   - Lower resolution = fewer cells = coarser overview
+#   - Valid range: 10-200 (default varies by data)
+#
+# To use: copy everything below the dashed line and paste into
+# GLYPH's "CSV Coordinates" input box.
+#
+# This example represents a simple L-shaped feature arrangement.
+# ---------------------------------------------------------------
+x,y
+10.0,5.0
+10.0,10.0
+10.0,15.0
+10.0,20.0
+10.0,25.0
+10.0,30.0
+15.0,5.0
+20.0,5.0
+25.0,5.0
+30.0,5.0

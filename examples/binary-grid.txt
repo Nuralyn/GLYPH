@@ -1,0 +1,28 @@
+# GLYPH Binary Grid Format
+#
+# Each row is a string of 0s and 1s, one row per line.
+#   1 = feature present (hole, stone, mound, marker)
+#   0 = feature absent (empty ground)
+#
+# Requirements:
+#   - Minimum 2 rows, 2 columns
+#   - Maximum 500 rows, 500 columns (62,500 cells max)
+#   - All rows must have the same number of columns
+#   - Only characters 0 and 1 (other characters are stripped)
+#
+# To use: copy everything below the dashed line and paste into
+# GLYPH's "Binary Grid" input box, then click LOAD.
+#
+# This example is a simple 10x20 grid with periodic column markers
+# and a gap pattern — it should classify as Structured Ledger.
+# ---------------------------------------------------------------
+00001000010000100001
+00001000010000100001
+00001000010000100001
+00000000000000000000
+00001000010000100001
+00001000010000100001
+00001000010000100001
+00000000000000000000
+00001000010000100001
+00001000010000100001

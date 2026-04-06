@@ -1,0 +1,56 @@
+# GLYPH Custom Site Template
+#
+# Use this template when preparing a new archaeological site
+# for analysis. Follow these steps:
+#
+# 1. DEFINE YOUR GRID
+#    Decide what each cell represents:
+#      - What is a "1"? (hole, stone, mound, wall segment, etc.)
+#      - What is a "0"? (empty ground, absence of feature)
+#      - What is your cell size? (1m x 1m? 5m x 5m?)
+#
+# 2. CHOOSE YOUR DATA SOURCE
+#    - Survey coordinates → use CSV format (see csv-coordinates.txt)
+#    - Elevation/LiDAR raster → use AAI Grid format (see aai-grid.txt)
+#    - Manual digitization → use binary grid below
+#    - Satellite imagery → use OpenTopography in GLYPH
+#
+# 3. SET GRID RESOLUTION
+#    - Too fine: noise dominates, analysis sees random scatter
+#    - Too coarse: structure lost, everything looks uniform
+#    - Rule of thumb: cell size should be ~1/2 the smallest
+#      meaningful feature spacing at your site
+#
+# 4. DOCUMENT YOUR METADATA
+#    When sharing or contributing your dataset, include:
+#      Site name:
+#      Location:
+#      Cultural attribution:
+#      Estimated date range:
+#      Data source:
+#      Grid resolution:
+#      Notes:
+#
+# 5. PASTE YOUR GRID BELOW
+#    Replace the placeholder with your actual data.
+#    All rows must have the same number of columns.
+#    Minimum: 2x2. Maximum: 500x500 (62,500 cells).
+#
+# ---------------------------------------------------------------
+# Site name: [Your Site Name]
+# Location: [Country, Region]
+# Attribution: [Culture/Period]
+# Date range: [e.g., 1400-1532 CE]
+# Source: [Survey method, publication, etc.]
+# Resolution: [e.g., 5m per cell]
+# ---------------------------------------------------------------
+0000000000
+0000000000
+0000000000
+0000000000
+0000000000
+0000000000
+0000000000
+0000000000
+0000000000
+0000000000
