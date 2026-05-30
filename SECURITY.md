@@ -23,6 +23,9 @@ The only network requests GLYPH makes are:
 | `fonts.googleapis.com` / `fonts.gstatic.com` | Load fonts | Page load |
 | `api.anthropic.com`, `api.openai.com`, `generativelanguage.googleapis.com`, `api.deepseek.com` | AI interpretation | Only when you click "Interpret" with your own API key |
 | `portal.opentopography.org` | Elevation data import | Only when you request terrain data with your own API key |
+| `gibs.earthdata.nasa.gov` | NASA satellite imagery (GIBS WMS) | Only when you fetch satellite imagery (no API key needed) |
+| `earth-search.aws.element84.com` | Sentinel-2 scene search (STAC API) | Only when you fetch Sentinel-2 data (no API key needed) |
+| `sentinel-cogs.s3.us-west-2.amazonaws.com` | Sentinel-2 COG pixel data | Only when you fetch Sentinel-2 data (no API key needed) |
 
 All external requests are governed by a strict Content Security Policy (CSP) that prevents connections to any unlisted domain.
 
@@ -34,7 +37,7 @@ All external requests are governed by a strict Content Security Policy (CSP) tha
 GLYPH ships with a restrictive CSP header that limits script sources, connection targets, and frame embedding. The CSP allowlists only the specific domains listed above.
 
 ### Subresource Integrity (SRI)
-All externally loaded scripts (React, ReactDOM, Babel) include SRI hashes that verify the file has not been tampered with. If a CDN serves modified code, the browser will refuse to execute it.
+React, ReactDOM, and Babel include SRI hashes that verify the file has not been tampered with. If a CDN serves modified code, the browser will refuse to execute it. The `geotiff.js` library (used for Sentinel-2 COG parsing) is loaded from unpkg.com without SRI; pin to a specific version (`@2.1.3`) to reduce supply-chain risk.
 
 ### Permissions Policy
 GLYPH explicitly disables browser APIs it does not use: camera, microphone, geolocation, and payment.
