@@ -3537,7 +3537,7 @@ ${generateInterpretation(analysis, gridMeta)}
 
       // ── Satellite (GIBS) handlers ──
       async function fetchGIBSData(s, w, n, e, dateStr, layer) {
-        const url = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best'
+        const url = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi'
           + '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1'
           + '&LAYERS=' + encodeURIComponent(layer.id)
           + '&FORMAT=image/png&TRANSPARENT=true'
@@ -3698,10 +3698,6 @@ ${generateInterpretation(analysis, gridMeta)}
       }
 
       async function fetchSatelliteImagery() {
-        if (location.protocol === 'file:') {
-          setSatError('Satellite imagery requires serving GLYPH from a web server (CORS restriction). Open a terminal in this folder and run:\n\nnpx serve\n\nThen open http://localhost:3000 in your browser.');
-          return;
-        }
         const lat = parseFloat(satLat);
         const lon = parseFloat(satLon);
         if (isNaN(lat) || lat < -90 || lat > 90) {
@@ -4606,17 +4602,6 @@ ${generateInterpretation(analysis, gridMeta)}
                 {/* Satellite mode */}
                 {inputMode === 'satellite' && (
                   <div>
-                    {location.protocol === 'file:' && (
-                      <div style={{
-                        fontSize: 11, color: COLORS.warningAlt, marginBottom: 16, padding: '12px 14px',
-                        background: rgba(COLORS.warningAlt, 0.06), border: `1px solid ${rgba(COLORS.warningAlt, 0.15)}`,
-                        borderRadius: 4, lineHeight: 1.8,
-                      }}>
-                        <strong>Local file detected.</strong> Satellite imagery requires a web server due to browser security (CORS).
-                        Run <code style={{ background: COLORS.bgElevated, padding: '2px 6px', borderRadius: 2 }}>npx serve</code> in
-                        this folder, then open <code style={{ background: COLORS.bgElevated, padding: '2px 6px', borderRadius: 2 }}>http://localhost:3000</code>.
-                      </div>
-                    )}
                     {/* Layer selection */}
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ fontSize: 10, letterSpacing: 2, color: COLORS.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>
