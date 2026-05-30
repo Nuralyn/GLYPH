@@ -65,8 +65,8 @@ Because GLYPH is a single HTML file, all CSS is inline. This requires `'unsafe-i
 - **Default:** API keys are stored in React state (memory only). They are lost when you close or refresh the page. This is the recommended mode.
 - **Optional persistence:** If you check "Remember my API keys," keys are stored in `localStorage` in **plaintext**. This is a convenience feature, not a security feature. Anyone with access to your browser's developer tools or filesystem can read them. Do not use this on shared or public computers.
 
-### Anthropic API key in URL
-The Anthropic Sonnet API requires the API key as a URL query parameter. This means the key may appear in browser history. This is a limitation of the Anthropic API design, not GLYPH.
+### Google Gemini API key in URL
+The Google Gemini API requires the API key as a URL query parameter. This means the key may appear in browser history. This is a limitation of the Gemini API design, not GLYPH.
 
 ---
 
