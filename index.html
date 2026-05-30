@@ -7,7 +7,7 @@
        unsafe-inline required because the app is a single HTML file with inline script.
        These are accepted trade-offs for the no-build-system architecture.
        The connect-src allowlist restricts network access to known API endpoints. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://api.deepseek.com https://portal.opentopography.org https://gibs.earthdata.nasa.gov https://earth-search.aws.element84.com https://sentinel-cogs.s3.us-west-2.amazonaws.com; img-src 'self' data: https://gibs.earthdata.nasa.gov; object-src 'none'; frame-ancestors 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://api.deepseek.com https://portal.opentopography.org https://gibs.earthdata.nasa.gov https://earth-search.aws.element84.com https://sentinel-cogs.s3.us-west-2.amazonaws.com https://unpkg.com; img-src 'self' data: https://gibs.earthdata.nasa.gov; object-src 'none'" />
   <meta name="referrer" content="no-referrer" />
   <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()" />
   <title>GLYPH — Archaeological Pattern Decoder</title>
@@ -3698,6 +3698,10 @@ ${generateInterpretation(analysis, gridMeta)}
       }
 
       async function fetchSatelliteImagery() {
+        if (location.protocol === 'file:') {
+          setSatError('Satellite imagery requires serving GLYPH from a web server (CORS restriction). Open a terminal in this folder and run:\n\nnpx serve\n\nThen open http://localhost:3000 in your browser.');
+          return;
+        }
         const lat = parseFloat(satLat);
         const lon = parseFloat(satLon);
         if (isNaN(lat) || lat < -90 || lat > 90) {
@@ -4602,6 +4606,17 @@ ${generateInterpretation(analysis, gridMeta)}
                 {/* Satellite mode */}
                 {inputMode === 'satellite' && (
                   <div>
+                    {location.protocol === 'file:' && (
+                      <div style={{
+                        fontSize: 11, color: COLORS.warningAlt, marginBottom: 16, padding: '12px 14px',
+                        background: rgba(COLORS.warningAlt, 0.06), border: `1px solid ${rgba(COLORS.warningAlt, 0.15)}`,
+                        borderRadius: 4, lineHeight: 1.8,
+                      }}>
+                        <strong>Local file detected.</strong> Satellite imagery requires a web server due to browser security (CORS).
+                        Run <code style={{ background: COLORS.bgElevated, padding: '2px 6px', borderRadius: 2 }}>npx serve</code> in
+                        this folder, then open <code style={{ background: COLORS.bgElevated, padding: '2px 6px', borderRadius: 2 }}>http://localhost:3000</code>.
+                      </div>
+                    )}
                     {/* Layer selection */}
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ fontSize: 10, letterSpacing: 2, color: COLORS.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>
@@ -4736,7 +4751,7 @@ ${generateInterpretation(analysis, gridMeta)}
                       <div style={{
                         color: COLORS.danger, fontSize: 11, marginBottom: 16, padding: '10px 14px',
                         background: rgba(COLORS.danger, 0.06), border: `1px solid ${rgba(COLORS.danger, 0.15)}`,
-                        borderRadius: 4, lineHeight: 1.6,
+                        borderRadius: 4, lineHeight: 1.6, whiteSpace: 'pre-line',
                       }}>
                         {satError}
                       </div>
