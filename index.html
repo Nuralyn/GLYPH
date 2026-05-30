@@ -3540,24 +3540,11 @@ ${generateInterpretation(analysis, gridMeta)}
         const url = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi'
           + '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1'
           + '&LAYERS=' + encodeURIComponent(layer.id)
-          + '&FORMAT=image/png&TRANSPARENT=true'
+          + '&FORMAT=image/jpeg'
           + '&SRS=EPSG:4326'
           + '&BBOX=' + w + ',' + s + ',' + e + ',' + n
           + '&WIDTH=256&HEIGHT=256'
           + '&TIME=' + dateStr;
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-        let response;
-        try {
-          response = await fetch(url, { signal: controller.signal });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-        if (!response.ok) throw new Error('GIBS API error (' + response.status + ')');
-
-        const blob = await response.blob();
-        const imgUrl = URL.createObjectURL(blob);
 
         return new Promise((resolve, reject) => {
           const img = new Image();
@@ -3568,16 +3555,14 @@ ${generateInterpretation(analysis, gridMeta)}
             canvas.height = img.height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0);
-            URL.revokeObjectURL(imgUrl);
             const parsed = parseImageToMatrix(canvas, layer.channel);
             if (parsed.error) { reject(new Error(parsed.error)); return; }
             resolve(parsed);
           };
           img.onerror = () => {
-            URL.revokeObjectURL(imgUrl);
-            reject(new Error('Failed to decode GIBS image'));
+            reject(new Error('GIBS image failed to load. The layer may not have data for this date — MODIS imagery has a ~2 day processing lag. Try an earlier date.'));
           };
-          img.src = imgUrl;
+          img.src = url;
         });
       }
 
@@ -3730,7 +3715,8 @@ ${generateInterpretation(analysis, gridMeta)}
           const e = (lon + lonDelta).toFixed(6);
 
           const layer = SATELLITE_LAYERS.find(l => l.id === satLayer) || SATELLITE_LAYERS[0];
-          const dateStr = satDate || new Date().toISOString().split('T')[0];
+          const defaultDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          const dateStr = satDate || defaultDate;
 
           let parsed;
           if (layer.source === 'sentinel2') {
