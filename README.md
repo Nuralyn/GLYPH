@@ -69,6 +69,14 @@ NxN similarity heatmap comparing every site against every other site simultaneou
 ### OpenTopography Integration
 Pull elevation data from anywhere on Earth using the OpenTopography Global DEM API. Set coordinates, adjust feature threshold, select grid resolution, and load directly into GLYPH for analysis. Requires a free API key from [opentopography.org](https://opentopography.org).
 
+### Satellite Imagery Pipeline
+Pull satellite imagery from free public APIs and convert it to binary grids for analysis:
+
+- **NASA GIBS** — MODIS true color, NDVI vegetation index, and VIIRS thermal anomalies (250m–1km resolution, no API key needed)
+- **Sentinel-2 via AWS** — NDVI, NDWI, and true color at 10m resolution via the Element84 STAC API and Cloud-Optimized GeoTIFFs (no API key needed)
+
+Satellite data supports both standard thresholding (features above mean) and inverted thresholding (features below mean), enabling detection of crop marks, moisture anomalies, and cleared ground patterns over buried archaeological structures.
+
 ### AI Interpretation (BYOK)
 Optional single-provider AI interpretation layer. Bring your own API key (Claude, GPT, Gemini, or DeepSeek), and GLYPH sends the analysis results for interpretive commentary. No key required to use any other feature. Keys are session-only by default. Optional localStorage persistence is available but stores keys in plaintext.
 
@@ -93,7 +101,7 @@ GLYPH ships with 8 preloaded datasets (structural approximations based on publis
 | Poverty Point (Mound Complex) | Louisiana, USA | 40×40 | Edge case |
 | Chankillo (Thirteen Towers) | Casma, Peru | 30×50 | Structured Ledger |
 
-Users can also load custom sites via binary grid input, CSV coordinates, or OpenTopography terrain import.
+Users can also load custom sites via binary grid input, CSV coordinates, OpenTopography terrain import, or satellite imagery.
 
 ---
 
@@ -146,10 +154,10 @@ GLYPH is a single-file React/Babel SPA. No build tools, no bundler, no package m
 
 - **Runtime:** React 18.3.1 + ReactDOM (CDN)
 - **Transpilation:** Babel Standalone 7.29.1 (CDN)
+- **GeoTIFF Parsing:** geotiff.js 2.1.3 (CDN, for Sentinel-2 COG support)
 - **Fonts:** Bebas Neue + Space Mono (Google Fonts)
 - **Charts:** Custom inline SVG (no charting library)
 - **Storage:** React state (session-scoped), with optional localStorage for API keys
-- **Size:** ~292KB
 
 Everything runs client-side. Your data never leaves your browser (unless you use the optional AI interpretation feature with your own API key).
 
@@ -177,6 +185,7 @@ If you have coordinate data for an archaeological site, GLYPH can analyze it. Ac
 - Binary grid (rows of 0s and 1s, newline-separated)
 - CSV with x, y columns (presence data) or x, y, value columns
 - OpenTopography API (lat/lon coordinates with your free API key)
+- Satellite imagery (NASA GIBS or Sentinel-2 via lat/lon coordinates, no API key needed)
 
 See the [`examples/`](examples/) folder for ready-to-paste templates in each format.
 
@@ -186,9 +195,9 @@ We welcome contributions of preloaded site datasets via pull request. See [CONTR
 
 ## Roadmap
 
+- [x] GeoTIFF / satellite imagery import (NASA GIBS + Sentinel-2 via AWS)
 - [ ] Community site library (shared dataset catalog with pre-computed analyses)
 - [ ] LiDAR point cloud import (LAZ/LAS direct ingestion)
-- [ ] GeoTIFF elevation model import
 - [ ] Multi-resolution sweep analysis
 - [ ] OpenTopography catalog search (`/otCatalog` endpoint)
 - [ ] PDF report export with embedded charts

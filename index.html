@@ -7,7 +7,7 @@
        unsafe-inline required because the app is a single HTML file with inline script.
        These are accepted trade-offs for the no-build-system architecture.
        The connect-src allowlist restricts network access to known API endpoints. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://api.deepseek.com https://portal.opentopography.org; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://api.deepseek.com https://portal.opentopography.org https://gibs.earthdata.nasa.gov https://earth-search.aws.element84.com https://sentinel-cogs.s3.us-west-2.amazonaws.com https://unpkg.com; img-src 'self' data: https://gibs.earthdata.nasa.gov; object-src 'none'" />
   <meta name="referrer" content="no-referrer" />
   <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()" />
   <title>GLYPH — Archaeological Pattern Decoder</title>
@@ -48,6 +48,7 @@
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.1/babel.min.js" integrity="sha384-Fo0OdKhdnE7y2WmzjOMW4PYjHkkANeu1501pWTqKrzAPeJMFQb4ZTdAA9dtrVUJV" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/geotiff@2.1.3/dist-browser/geotiff.js" crossorigin="anonymous"></script>
   <style>
     :root, [data-theme="dark"] {
       --color-bg: #111111;
@@ -814,6 +815,27 @@
       { name: 'Stonehenge, UK', lat: 51.1789, lon: -1.8262, radius: 300 },
     ];
 
+    const SATELLITE_LAYERS = [
+      { id: 'MODIS_Terra_CorrectedReflectance_TrueColor', name: 'True Color (MODIS)', resolution: '250m', thresholdMode: 'above', channel: 'luminance', source: 'gibs' },
+      { id: 'MODIS_Terra_NDVI_8Day', name: 'Vegetation Index (NDVI)', resolution: '250m', thresholdMode: 'below', channel: 'green', source: 'gibs' },
+      { id: 'VIIRS_NOAA20_Thermal_Anomalies_375m_Night', name: 'Thermal Anomalies (Night)', resolution: '375m', thresholdMode: 'above', channel: 'red', source: 'gibs' },
+      { id: 'sentinel2-ndvi', name: 'NDVI (Sentinel-2, 10m)', resolution: '10m', thresholdMode: 'below', channel: 'computed', source: 'sentinel2', bands: ['red', 'nir'] },
+      { id: 'sentinel2-ndwi', name: 'NDWI (Sentinel-2, 10m)', resolution: '10m', thresholdMode: 'below', channel: 'computed', source: 'sentinel2', bands: ['green', 'nir'] },
+      { id: 'sentinel2-truecolor', name: 'True Color (Sentinel-2, 10m)', resolution: '10m', thresholdMode: 'above', channel: 'luminance', source: 'sentinel2', bands: ['red', 'green', 'blue'] },
+    ];
+
+    const SENTINEL2_BAND_MAP = {
+      blue: 'blue', green: 'green', red: 'red', nir: 'nir',
+    };
+
+    const SATELLITE_PRESETS = [
+      { name: 'Nazca Lines, Peru', lat: -14.7390, lon: -75.1300, radius: 5000 },
+      { name: 'Carnac, France', lat: 47.5931, lon: -3.0744, radius: 3000 },
+      { name: 'Poverty Point, USA', lat: 32.6369, lon: -91.4083, radius: 2000 },
+      { name: 'Göbekli Tepe, Turkey', lat: 37.2231, lon: 38.9225, radius: 2000 },
+      { name: 'Stonehenge, UK', lat: 51.1789, lon: -1.8262, radius: 2000 },
+    ];
+
     const PANELS = [
       { id: 'loader', label: 'Load Site', group: 'data' },
       { id: 'visualizer', label: 'Grid', group: 'data' },
@@ -1046,8 +1068,14 @@
       return { mean, stddev: Math.sqrt(sqSum / count), min, max, validCount: count };
     }
 
-    function thresholdElevation(elevData, stats, thresholdStdDevs) {
+    function thresholdElevation(elevData, stats, thresholdStdDevs, mode) {
       const cutoff = stats.mean + thresholdStdDevs * stats.stddev;
+      if (mode === 'below') {
+        const cutoffBelow = stats.mean - thresholdStdDevs * stats.stddev;
+        return elevData.data.map(row =>
+          row.map(v => (v !== elevData.nodata && v < cutoffBelow) ? 1 : 0)
+        );
+      }
       return elevData.data.map(row =>
         row.map(v => (v !== elevData.nodata && v > cutoff) ? 1 : 0)
       );
@@ -1079,6 +1107,46 @@
         result.push(row);
       }
       return result;
+    }
+
+    /* ══════════════════════════════════════════════
+       SATELLITE IMAGE PARSER
+    ══════════════════════════════════════════════ */
+
+    function parseImageToMatrix(canvas, channel) {
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const pixels = imageData.data;
+      const data = [];
+      for (let y = 0; y < h; y++) {
+        const row = [];
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2], a = pixels[i + 3];
+          if (a === 0) {
+            row.push(-9999);
+          } else if (channel === 'green') {
+            row.push(g);
+          } else if (channel === 'red') {
+            row.push(r);
+          } else {
+            row.push(0.299 * r + 0.587 * g + 0.114 * b);
+          }
+        }
+        data.push(row);
+      }
+      return {
+        ncols: w,
+        nrows: h,
+        xllcorner: 0,
+        yllcorner: 0,
+        cellsize: 1,
+        nodata: -9999,
+        data,
+        error: null,
+      };
     }
 
     /* ══════════════════════════════════════════════
@@ -2522,6 +2590,23 @@
       const topoElevCanvasRef = useRef(null);
       const topoBinaryCanvasRef = useRef(null);
 
+      // Satellite (GIBS) import
+      const [satLayer, setSatLayer] = useState(SATELLITE_LAYERS[0].id);
+      const [satLat, setSatLat] = useState('');
+      const [satLon, setSatLon] = useState('');
+      const [satRadius, setSatRadius] = useState(5000);
+      const [satDate, setSatDate] = useState('');
+      const [satLoading, setSatLoading] = useState(false);
+      const [satCooldown, setSatCooldown] = useState(false);
+      const [satError, setSatError] = useState(null);
+      const [satImageData, setSatImageData] = useState(null);
+      const [satStats, setSatStats] = useState(null);
+      const [satThreshold, setSatThreshold] = useState(1.0);
+      const [satBinaryGrid, setSatBinaryGrid] = useState(null);
+      const [satResolution, setSatResolution] = useState(50);
+      const satPreviewCanvasRef = useRef(null);
+      const satBinaryCanvasRef = useRef(null);
+
       // Matrix panel
       const [matrixCache, setMatrixCache] = useState({});
       const [matrixResults, setMatrixResults] = useState(null);
@@ -3450,6 +3535,331 @@ ${generateInterpretation(analysis, gridMeta)}
         }
       }, [topoBinaryGrid]);
 
+      // ── Satellite (GIBS) handlers ──
+      async function fetchGIBSData(s, w, n, e, dateStr, layer) {
+        const url = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best'
+          + '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1'
+          + '&LAYERS=' + encodeURIComponent(layer.id)
+          + '&FORMAT=image/png&TRANSPARENT=true'
+          + '&SRS=EPSG:4326'
+          + '&BBOX=' + w + ',' + s + ',' + e + ',' + n
+          + '&WIDTH=256&HEIGHT=256'
+          + '&TIME=' + dateStr;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        let response;
+        try {
+          response = await fetch(url, { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+        if (!response.ok) throw new Error('GIBS API error (' + response.status + ')');
+
+        const blob = await response.blob();
+        const imgUrl = URL.createObjectURL(blob);
+
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            URL.revokeObjectURL(imgUrl);
+            const parsed = parseImageToMatrix(canvas, layer.channel);
+            if (parsed.error) { reject(new Error(parsed.error)); return; }
+            resolve(parsed);
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(imgUrl);
+            reject(new Error('Failed to decode GIBS image'));
+          };
+          img.src = imgUrl;
+        });
+      }
+
+      async function fetchSentinel2Data(south, west, north, east, dateStr, layer) {
+        const endDate = dateStr;
+        const startDate = new Date(new Date(dateStr).getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        const searchBody = {
+          collections: ['sentinel-2-l2a'],
+          bbox: [west, south, east, north],
+          datetime: startDate + 'T00:00:00Z/' + endDate + 'T23:59:59Z',
+          limit: 5,
+          query: { 'eo:cloud_cover': { lt: 20 } },
+          sortby: [{ field: 'properties.datetime', direction: 'desc' }],
+        };
+
+        const searchResponse = await fetch('https://earth-search.aws.element84.com/v1/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(searchBody),
+        });
+        if (!searchResponse.ok) throw new Error('STAC search failed (' + searchResponse.status + ')');
+
+        const searchResult = await searchResponse.json();
+        if (!searchResult.features || searchResult.features.length === 0) {
+          throw new Error('No Sentinel-2 scenes found for this area and date range (' + startDate + ' to ' + endDate + '). Try a wider date range or different location.');
+        }
+
+        const scene = searchResult.features[0];
+        const assets = scene.assets;
+        const bandUrls = {};
+        for (const bandName of layer.bands) {
+          const assetKey = SENTINEL2_BAND_MAP[bandName];
+          if (!assets[assetKey] || !assets[assetKey].href) {
+            throw new Error('Band "' + bandName + '" not available in this scene');
+          }
+          bandUrls[bandName] = assets[assetKey].href;
+        }
+
+        if (typeof GeoTIFF === 'undefined') {
+          throw new Error('GeoTIFF library not loaded. Refresh the page and try again.');
+        }
+
+        const targetSize = 256;
+        const bandRasters = {};
+        for (const [bandName, url] of Object.entries(bandUrls)) {
+          const tiff = await GeoTIFF.fromUrl(url);
+          const image = await tiff.getImage();
+          const imgWidth = image.getWidth();
+          const imgHeight = image.getHeight();
+
+          const bbox = image.getBoundingBox();
+          const imgWest = bbox[0], imgSouth = bbox[1], imgEast = bbox[2], imgNorth = bbox[3];
+
+          const xScale = imgWidth / (imgEast - imgWest);
+          const yScale = imgHeight / (imgNorth - imgSouth);
+          const px0 = Math.max(0, Math.floor((west - imgWest) * xScale));
+          const py0 = Math.max(0, Math.floor((imgNorth - north) * yScale));
+          const px1 = Math.min(imgWidth, Math.ceil((east - imgWest) * xScale));
+          const py1 = Math.min(imgHeight, Math.ceil((imgNorth - south) * yScale));
+
+          const windowWidth = px1 - px0;
+          const windowHeight = py1 - py0;
+          if (windowWidth < 2 || windowHeight < 2) throw new Error('Selected area is too small for this Sentinel-2 tile');
+
+          const rasters = await image.readRasters({
+            window: [px0, py0, px1, py1],
+            width: targetSize,
+            height: targetSize,
+          });
+          bandRasters[bandName] = rasters[0];
+        }
+
+        const data = [];
+        if (layer.channel === 'computed' && layer.bands.length === 2) {
+          const b1 = bandRasters[layer.bands[0]];
+          const b2 = bandRasters[layer.bands[1]];
+          for (let y = 0; y < targetSize; y++) {
+            const row = [];
+            for (let x = 0; x < targetSize; x++) {
+              const i = y * targetSize + x;
+              const v1 = b1[i], v2 = b2[i];
+              const sum = v1 + v2;
+              if (sum === 0) { row.push(-9999); }
+              else {
+                const idx = layer.id === 'sentinel2-ndvi' ? (v2 - v1) / (v2 + v1) : (v1 - v2) / (v1 + v2);
+                row.push(idx * 1000);
+              }
+            }
+            data.push(row);
+          }
+        } else {
+          const bands = layer.bands.map(b => bandRasters[b]);
+          for (let y = 0; y < targetSize; y++) {
+            const row = [];
+            for (let x = 0; x < targetSize; x++) {
+              const i = y * targetSize + x;
+              if (bands.length === 3) {
+                row.push(0.299 * bands[0][i] + 0.587 * bands[1][i] + 0.114 * bands[2][i]);
+              } else {
+                row.push(bands[0][i]);
+              }
+            }
+            data.push(row);
+          }
+        }
+
+        return {
+          ncols: targetSize,
+          nrows: targetSize,
+          xllcorner: west,
+          yllcorner: south,
+          cellsize: (east - west) / targetSize,
+          nodata: -9999,
+          data,
+          error: null,
+        };
+      }
+
+      async function fetchSatelliteImagery() {
+        if (location.protocol === 'file:') {
+          setSatError('Satellite imagery requires serving GLYPH from a web server (CORS restriction). Open a terminal in this folder and run:\n\nnpx serve\n\nThen open http://localhost:3000 in your browser.');
+          return;
+        }
+        const lat = parseFloat(satLat);
+        const lon = parseFloat(satLon);
+        if (isNaN(lat) || lat < -90 || lat > 90) {
+          setSatError('Invalid latitude (must be between -90 and 90)');
+          return;
+        }
+        if (isNaN(lon) || lon < -180 || lon > 180) {
+          setSatError('Invalid longitude (must be between -180 and 180)');
+          return;
+        }
+        const layer = SATELLITE_LAYERS.find(l => l.id === satLayer) || SATELLITE_LAYERS[0];
+        const minRadius = layer.source === 'sentinel2' ? 100 : 1000;
+        if (satRadius < minRadius || satRadius > 100000) {
+          setSatError('Radius must be between ' + minRadius.toLocaleString() + ' and 100,000 meters');
+          return;
+        }
+
+        setSatLoading(true);
+        setSatError(null);
+        setSatImageData(null);
+        setSatBinaryGrid(null);
+        setSatStats(null);
+
+        try {
+          const latDelta = satRadius / 111320;
+          const lonDelta = latDelta / Math.cos(lat * Math.PI / 180);
+          const s = (lat - latDelta).toFixed(6);
+          const n = (lat + latDelta).toFixed(6);
+          const w = (lon - lonDelta).toFixed(6);
+          const e = (lon + lonDelta).toFixed(6);
+
+          const layer = SATELLITE_LAYERS.find(l => l.id === satLayer) || SATELLITE_LAYERS[0];
+          const dateStr = satDate || new Date().toISOString().split('T')[0];
+
+          let parsed;
+          if (layer.source === 'sentinel2') {
+            parsed = await fetchSentinel2Data(parseFloat(s), parseFloat(w), parseFloat(n), parseFloat(e), dateStr, layer);
+          } else {
+            parsed = await fetchGIBSData(s, w, n, e, dateStr, layer);
+          }
+
+          const stats = computeElevationStats(parsed);
+          if (stats.validCount === 0) throw new Error('No valid pixel data (image may be blank or fully transparent)');
+
+          setSatImageData(parsed);
+          setSatStats(stats);
+          const binary = thresholdElevation(parsed, stats, satThreshold, layer.thresholdMode);
+          setSatBinaryGrid(binary);
+          showToast('Fetched ' + parsed.nrows + '×' + parsed.ncols + ' ' + (layer.source === 'sentinel2' ? 'Sentinel-2' : 'satellite') + ' image');
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            setSatError('Request timed out after 30 seconds. Try again.');
+          } else {
+            setSatError(err.message || 'Failed to fetch satellite imagery.');
+          }
+        } finally {
+          setSatLoading(false);
+          setSatCooldown(true);
+          setTimeout(() => setSatCooldown(false), 3000);
+        }
+      }
+
+      function handleSatLoad() {
+        if (!satBinaryGrid) return;
+        let finalGrid = satBinaryGrid;
+        const srcRows = satBinaryGrid.length;
+        const srcCols = satBinaryGrid[0].length;
+
+        if (srcRows > satResolution || srcCols > satResolution) {
+          const aspect = srcCols / srcRows;
+          let targetRows, targetCols;
+          if (aspect >= 1) {
+            targetCols = satResolution;
+            targetRows = Math.max(10, Math.round(satResolution / aspect));
+          } else {
+            targetRows = satResolution;
+            targetCols = Math.max(10, Math.round(satResolution * aspect));
+          }
+          finalGrid = downsampleBinaryGrid(satBinaryGrid, targetRows, targetCols);
+        }
+
+        const lat = parseFloat(satLat).toFixed(4);
+        const lon = parseFloat(satLon).toFixed(4);
+        const layer = SATELLITE_LAYERS.find(l => l.id === satLayer) || SATELLITE_LAYERS[0];
+        const name = layer.name + ' [' + lat + ', ' + lon + '] r=' + satRadius + 'm';
+
+        setGrid(finalGrid);
+        setGridMeta({ rows: finalGrid.length, cols: finalGrid[0].length, name });
+        setParseError(null);
+        setAnalysis(null);
+        setAiResponse(null);
+        setAiError(null);
+        setAiResponseMeta(null);
+        setSelectedCell(null);
+        setZoom(1);
+        setActivePanel('visualizer');
+        showToast('Loaded: ' + name + ' (' + finalGrid.length + '×' + finalGrid[0].length + ')');
+      }
+
+      // Recompute satellite binary grid when threshold changes
+      useEffect(() => {
+        if (!satImageData || !satStats) return;
+        const layer = SATELLITE_LAYERS.find(l => l.id === satLayer) || SATELLITE_LAYERS[0];
+        const binary = thresholdElevation(satImageData, satStats, satThreshold, layer.thresholdMode);
+        setSatBinaryGrid(binary);
+      }, [satThreshold, satImageData, satStats, satLayer]);
+
+      // Render satellite preview canvas
+      useEffect(() => {
+        if (!satImageData || !satStats || !satPreviewCanvasRef.current) return;
+        const canvas = satPreviewCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const data = satImageData.data;
+        const rows = data.length;
+        const cols = data[0].length;
+
+        const maxPx = 300;
+        const cellPx = Math.max(1, Math.floor(maxPx / Math.max(rows, cols)));
+        canvas.width = cols * cellPx;
+        canvas.height = rows * cellPx;
+
+        const range = satStats.max - satStats.min;
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            const v = data[i][j];
+            if (v === satImageData.nodata) {
+              ctx.fillStyle = COLORS.bgElevated;
+            } else {
+              const g = range > 0 ? Math.round(((v - satStats.min) / range) * 255) : 128;
+              ctx.fillStyle = 'rgb(' + g + ',' + g + ',' + g + ')';
+            }
+            ctx.fillRect(j * cellPx, i * cellPx, cellPx, cellPx);
+          }
+        }
+      }, [satImageData, satStats]);
+
+      // Render satellite binary preview canvas
+      useEffect(() => {
+        if (!satBinaryGrid || !satBinaryCanvasRef.current) return;
+        const canvas = satBinaryCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const grid = satBinaryGrid;
+        const rows = grid.length;
+        const cols = grid[0].length;
+
+        const maxPx = 300;
+        const cellPx = Math.max(1, Math.floor(maxPx / Math.max(rows, cols)));
+        canvas.width = cols * cellPx;
+        canvas.height = rows * cellPx;
+
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            ctx.fillStyle = grid[i][j] === 1 ? COLORS.gridActive : COLORS.gridInactive;
+            ctx.fillRect(j * cellPx, i * cellPx, cellPx, cellPx);
+          }
+        }
+      }, [satBinaryGrid]);
+
       // ── Library handlers ──
       function handleSaveToLibrary() {
         if (!grid || !gridMeta) return;
@@ -3734,7 +4144,7 @@ ${generateInterpretation(analysis, gridMeta)}
                       </div>
                       <div>
                         <span style={{ color: COLORS.accent, fontWeight: 700, marginRight: 8 }}>5.</span>
-                        Now try your own data — paste a binary grid, load CSV coordinates, or pull terrain from OpenTopography
+                        Now try your own data — paste a binary grid, load CSV coordinates, pull terrain from OpenTopography, or fetch satellite imagery
                       </div>
                     </div>
                   </div>
@@ -3852,6 +4262,10 @@ ${generateInterpretation(analysis, gridMeta)}
                     className={`panel-tab${inputMode === 'topo' ? ' active' : ''}`}
                     onClick={() => { setInputMode('topo'); setParseError(null); }}
                   >OpenTopography</button>
+                  <button
+                    className={`panel-tab${inputMode === 'satellite' ? ' active' : ''}`}
+                    onClick={() => { setInputMode('satellite'); setParseError(null); }}
+                  >Satellite</button>
                 </div>
 
                 {/* Binary mode (existing) */}
@@ -4182,6 +4596,289 @@ ${generateInterpretation(analysis, gridMeta)}
                     {topoBinaryGrid && (
                       <div style={{ textAlign: 'center', marginTop: 20 }}>
                         <button className="analyze-btn" onClick={handleTopoLoad}>
+                          LOAD INTO GLYPH
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Satellite mode */}
+                {inputMode === 'satellite' && (
+                  <div>
+                    {location.protocol === 'file:' && (
+                      <div style={{
+                        fontSize: 11, color: COLORS.warningAlt, marginBottom: 16, padding: '12px 14px',
+                        background: rgba(COLORS.warningAlt, 0.06), border: `1px solid ${rgba(COLORS.warningAlt, 0.15)}`,
+                        borderRadius: 4, lineHeight: 1.8,
+                      }}>
+                        <strong>Local file detected.</strong> Satellite imagery requires a web server due to browser security (CORS).
+                        Run <code style={{ background: COLORS.bgElevated, padding: '2px 6px', borderRadius: 2 }}>npx serve</code> in
+                        this folder, then open <code style={{ background: COLORS.bgElevated, padding: '2px 6px', borderRadius: 2 }}>http://localhost:3000</code>.
+                      </div>
+                    )}
+                    {/* Layer selection */}
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 10, letterSpacing: 2, color: COLORS.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>
+                        Satellite Layer
+                      </div>
+                      <select
+                        value={satLayer}
+                        onChange={e => setSatLayer(e.target.value)}
+                        style={{
+                          width: '100%', fontFamily: "'Space Mono', monospace", fontSize: 11,
+                          background: COLORS.bgElevated, color: COLORS.textPrimary,
+                          border: '1px solid ' + COLORS.borderSubtle, borderRadius: 3, padding: '8px 10px',
+                        }}
+                      >
+                        <optgroup label="NASA GIBS (250m–1km)">
+                          {SATELLITE_LAYERS.filter(l => l.source === 'gibs').map(l => (
+                            <option key={l.id} value={l.id}>{l.name}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Sentinel-2 via AWS (10m)">
+                          {SATELLITE_LAYERS.filter(l => l.source === 'sentinel2').map(l => (
+                            <option key={l.id} value={l.id}>{l.name}</option>
+                          ))}
+                        </optgroup>
+                      </select>
+                      <div style={{ fontSize: 9, color: COLORS.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+                        {(() => {
+                          const layer = SATELLITE_LAYERS.find(l => l.id === satLayer);
+                          if (!layer) return null;
+                          if (layer.thresholdMode === 'below') return 'Threshold mode: below mean (low values = features). Ideal for detecting cleared ground, crop marks.';
+                          return 'Threshold mode: above mean (high values = features). Detects bright/hot anomalies.';
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Date selection */}
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 10, letterSpacing: 2, color: COLORS.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>
+                        Date
+                      </div>
+                      <input
+                        type="date"
+                        value={satDate}
+                        onChange={e => setSatDate(e.target.value)}
+                        style={{
+                          fontFamily: "'Space Mono', monospace", fontSize: 11,
+                          background: COLORS.bgElevated, color: COLORS.textPrimary,
+                          border: '1px solid ' + COLORS.borderSubtle, borderRadius: 3, padding: '8px 10px',
+                        }}
+                      />
+                      <div style={{ fontSize: 9, color: COLORS.textMuted, marginTop: 4 }}>
+                        Leave blank for most recent available. Cloudy days may return blank imagery.
+                      </div>
+                    </div>
+
+                    {/* Coordinates */}
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 10, letterSpacing: 2, color: COLORS.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>
+                        Coordinates
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 9, color: COLORS.textMuted, marginBottom: 4 }}>Latitude</div>
+                          <input type="text" value={satLat} onChange={e => setSatLat(e.target.value)} placeholder="-14.739" />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 9, color: COLORS.textMuted, marginBottom: 4 }}>Longitude</div>
+                          <input type="text" value={satLon} onChange={e => setSatLon(e.target.value)} placeholder="-75.130" />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 9, color: COLORS.textMuted, marginBottom: 4 }}>Radius (m)</div>
+                          <input type="number" value={satRadius} onChange={e => setSatRadius(parseInt(e.target.value) || 5000)} min={(() => { const l = SATELLITE_LAYERS.find(x => x.id === satLayer); return l && l.source === 'sentinel2' ? 100 : 1000; })()} max={100000} />
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 9, color: COLORS.textMuted }}>
+                        {(() => {
+                          const l = SATELLITE_LAYERS.find(x => x.id === satLayer);
+                          if (l && l.source === 'sentinel2') return 'Minimum 100m radius (Sentinel-2 resolution is 10m)';
+                          return 'Minimum 1,000m radius recommended (GIBS resolution is 250m–1km)';
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Preset coordinates */}
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 10, letterSpacing: 2, color: COLORS.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>
+                        Quick Coordinates
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {SATELLITE_PRESETS.map((p, idx) => (
+                          <button key={idx}
+                            onClick={() => { setSatLat(String(p.lat)); setSatLon(String(p.lon)); setSatRadius(p.radius); }}
+                            style={{
+                              fontFamily: "'Space Mono', monospace", fontSize: 10, padding: '6px 12px',
+                              background: COLORS.bgElevated, border: '1px solid ' + COLORS.borderSubtle,
+                              color: COLORS.textSecondary, cursor: 'pointer', borderRadius: 3,
+                              transition: 'all 0.3s ease',
+                            }}
+                            onMouseOver={e => { e.currentTarget.style.borderColor = COLORS.borderBright; e.currentTarget.style.color = COLORS.accent; }}
+                            onMouseOut={e => { e.currentTarget.style.borderColor = COLORS.borderSubtle; e.currentTarget.style.color = COLORS.textSecondary; }}
+                          >{p.name}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Divider */}
+                    <div style={{ borderTop: '1px solid ' + COLORS.borderSubtle, margin: '20px 0' }} />
+
+                    {/* Fetch button */}
+                    <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                      <button
+                        className="analyze-btn"
+                        onClick={fetchSatelliteImagery}
+                        disabled={satLoading || satCooldown}
+                      >
+                        {satLoading ? (
+                          React.createElement('span', { style: { display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' } },
+                            React.createElement('span', { style: {
+                              width: 14, height: 14,
+                              border: '2px solid ' + COLORS.borderMed, borderTopColor: COLORS.accent,
+                              borderRadius: '50%', display: 'inline-block',
+                              animation: 'spin 0.8s linear infinite',
+                            }}),
+                            'FETCHING IMAGERY…'
+                          )
+                        ) : 'FETCH SATELLITE IMAGERY'}
+                      </button>
+                    </div>
+
+                    {/* Error display */}
+                    {satError && (
+                      <div style={{
+                        color: COLORS.danger, fontSize: 11, marginBottom: 16, padding: '10px 14px',
+                        background: rgba(COLORS.danger, 0.06), border: `1px solid ${rgba(COLORS.danger, 0.15)}`,
+                        borderRadius: 4, lineHeight: 1.6, whiteSpace: 'pre-line',
+                      }}>
+                        {satError}
+                      </div>
+                    )}
+
+                    {/* Image preview */}
+                    {satImageData && satStats && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 10, letterSpacing: 2, color: COLORS.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>
+                          Satellite Preview ({satImageData.nrows}&times;{satImageData.ncols})
+                        </div>
+                        <div style={{
+                          background: COLORS.bgCard, border: '1px solid ' + COLORS.borderSubtle,
+                          borderRadius: 4, padding: 14, marginBottom: 8,
+                        }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11, marginBottom: 12 }}>
+                            <div><span style={{ color: COLORS.textMuted }}>Min: </span><span style={{ color: COLORS.accent }}>{satStats.min.toFixed(1)}</span></div>
+                            <div><span style={{ color: COLORS.textMuted }}>Max: </span><span style={{ color: COLORS.accent }}>{satStats.max.toFixed(1)}</span></div>
+                            <div><span style={{ color: COLORS.textMuted }}>Mean: </span><span style={{ color: COLORS.accent }}>{satStats.mean.toFixed(1)}</span></div>
+                            <div><span style={{ color: COLORS.textMuted }}>Std Dev: </span><span style={{ color: COLORS.accent }}>{satStats.stddev.toFixed(2)}</span></div>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'center' }}>
+                            <canvas ref={satPreviewCanvasRef} style={{ maxWidth: 300, imageRendering: 'pixelated', border: '1px solid ' + COLORS.borderSubtle }} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Feature threshold slider */}
+                    {satImageData && satStats && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <div style={{ fontSize: 10, letterSpacing: 2, color: COLORS.textMuted, textTransform: 'uppercase' }}>
+                            Feature Threshold
+                          </div>
+                          <div style={{ fontSize: 13, color: COLORS.accent, fontWeight: 700 }}>
+                            {satThreshold.toFixed(1)}&sigma;
+                          </div>
+                        </div>
+                        <input
+                          type="range" min={0.5} max={3.0} step={0.1} value={satThreshold}
+                          onChange={e => setSatThreshold(parseFloat(e.target.value))}
+                          style={{ width: '100%' }}
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: COLORS.textMuted, marginTop: 2 }}>
+                          <span>0.5&sigma; (more features)</span><span>3.0&sigma; (fewer features)</span>
+                        </div>
+                        {(() => {
+                          const layer = SATELLITE_LAYERS.find(l => l.id === satLayer);
+                          const mode = layer ? layer.thresholdMode : 'above';
+                          if (mode === 'below') {
+                            return <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 6, lineHeight: 1.6 }}>
+                              Pixels below {(satStats.mean - satThreshold * satStats.stddev).toFixed(1)} will be marked as features (inverted threshold)
+                            </div>;
+                          }
+                          return <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 6, lineHeight: 1.6 }}>
+                            Pixels above {(satStats.mean + satThreshold * satStats.stddev).toFixed(1)} will be marked as features
+                          </div>;
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Binary threshold preview */}
+                    {satBinaryGrid && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 10, letterSpacing: 2, color: COLORS.textMuted, textTransform: 'uppercase', marginBottom: 8 }}>
+                          Binary Threshold Preview
+                        </div>
+                        <div style={{
+                          background: COLORS.bgCard, border: '1px solid ' + COLORS.borderSubtle,
+                          borderRadius: 4, padding: 14, marginBottom: 8,
+                        }}>
+                          {(() => {
+                            const ones = satBinaryGrid.reduce((s, row) => s + row.reduce((rs, v) => rs + v, 0), 0);
+                            const total = satBinaryGrid.length * satBinaryGrid[0].length;
+                            const pct = (ones / total * 100).toFixed(1);
+                            return (
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11, marginBottom: 12 }}>
+                                <div><span style={{ color: COLORS.textMuted }}>Features: </span><span style={{ color: COLORS.gridActive }}>{ones}</span></div>
+                                <div><span style={{ color: COLORS.textMuted }}>Total: </span><span style={{ color: COLORS.textSecondary }}>{total}</span></div>
+                                <div><span style={{ color: COLORS.textMuted }}>Density: </span><span style={{ color: COLORS.accent }}>{pct}%</span></div>
+                                <div><span style={{ color: COLORS.textMuted }}>Grid: </span><span style={{ color: COLORS.textSecondary }}>{satBinaryGrid.length}&times;{satBinaryGrid[0].length}</span></div>
+                              </div>
+                            );
+                          })()}
+                          <div style={{ display: 'flex', justifyContent: 'center' }}>
+                            <canvas ref={satBinaryCanvasRef} style={{ maxWidth: 300, imageRendering: 'pixelated', border: '1px solid ' + COLORS.borderSubtle }} />
+                          </div>
+                          {(() => {
+                            const ones = satBinaryGrid.reduce((s, row) => s + row.reduce((rs, v) => rs + v, 0), 0);
+                            if (ones === 0) return (
+                              <div style={{ fontSize: 10, color: COLORS.warning, marginTop: 10, lineHeight: 1.6, textAlign: 'center' }}>
+                                No significant features detected. Try adjusting the threshold, changing the date, or selecting a different layer.
+                              </div>
+                            );
+                            return null;
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Output resolution slider */}
+                    {satBinaryGrid && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <div style={{ fontSize: 10, letterSpacing: 2, color: COLORS.textMuted, textTransform: 'uppercase' }}>
+                            Grid Resolution
+                          </div>
+                          <div style={{ fontSize: 13, color: COLORS.accent, fontWeight: 700 }}>
+                            {satResolution}&times;{satResolution}
+                          </div>
+                        </div>
+                        <input
+                          type="range" min={10} max={100} step={1} value={satResolution}
+                          onChange={e => setSatResolution(parseInt(e.target.value))}
+                          style={{ width: '100%' }}
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: COLORS.textMuted, marginTop: 2 }}>
+                          <span>10&times;10</span><span>100&times;100</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Load into GLYPH button */}
+                    {satBinaryGrid && (
+                      <div style={{ textAlign: 'center', marginTop: 20 }}>
+                        <button className="analyze-btn" onClick={handleSatLoad}>
                           LOAD INTO GLYPH
                         </button>
                       </div>
